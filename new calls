@@ -1,0 +1,50 @@
+import pandas as pd
+import html5lib
+from bs4 import BeautifulSoup
+import requests
+# Scrape the entire S&P500 list from Wikipedia into a Pandas DataFrame;
+ticker_list = pd.read_html(
+    'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies')
+df = ticker_list[0]
+
+import numpy as np
+import pandas as pd
+from tqdm.notebook import tqdm
+daily_change_df = pd.DataFrame(columns=['symbol','avg_day_change','RSI'])
+for stock in tqdm(df['Symbol'].unique()):
+    ticker = yf.Ticker(stock)
+    hist = ticker.history(period="2mo").reset_index()
+    hist['Daily_Spread'] = hist['High'] - hist['Low']
+    ## 14_Day RSI
+    hist['Up Move'] = np.nan
+    hist['Down Move'] = np.nan
+    hist['Average Up'] = np.nan
+    hist['Average Down'] = np.nan
+    # Relative Strength
+    hist['RS'] = np.nan
+    # Relative Strength Index
+    hist['RSI'] = np.nan
+    ## Calculate Up Move & Down Move
+    for x in range(1, len(hist)):
+        hist.loc[x,'Up Move'] = 0
+        hist.loc[x,'Down Move'] = 0
+
+        if hist.loc[x,'Close'] > hist.loc[x-1,'Close']:
+            hist.loc[x,'Up Move'] = hist.loc[x,'Close'] - hist.loc[x-1,'Close']
+
+        if hist.loc[x,'Close'] < hist.loc[x-1,'Close']:
+            hist.loc[x,'Down Move'] = abs(hist.loc[x,'Close']- hist.loc[x-1,'Close'])
+
+        ## Calculate initial Average Up & Down, RS and RSI
+    hist.loc[14,'Average Up'] = hist.loc[1:15,'Up Move'].mean()
+    hist.loc[14,'Average Down']= hist.loc[1:15,'Down Move'].mean()
+    hist.loc[14,'RS'] = hist.loc[14,'Average Up']/ hist.loc[14,'Average Down']
+    hist.loc[14,'RSI'] = 100 - (100/(1+hist.loc[14,'RS']))
+    ## Calculate rest of Average Up, Average Down, RS, RSI
+    for x in range(15, len(hist)):
+        hist.loc[x,'Average Up'] = (hist.loc[x-1,'Average Up']*13+hist.loc[x,'Up Move'])/14
+        hist.loc[x,'Average Down'] = (hist.loc[x-1,'Average Down']*13+hist.loc[x,'Down Move'])/14
+        hist.loc[x,'RS'] = hist.loc[x,'Average Up']/ hist.loc[x,'Average Down']
+        hist.loc[x,'RSI'] = 100 - (100/(1+hist.loc[x,'RS']))
+    RSI = hist['RSI'].iloc[-1]
+    daily_change_df = pd.concat([daily_change_df,pd.DataFrame(columns=['symbol','avg_day_change','RSI'],data=pd.DataFrame(columns=['symbol','avg_day_change','RSI'],data=[[stock,hist['Daily_Spread'].mean()/hist['Open'].mean(),RSI]]))],axis=0)
